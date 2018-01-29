@@ -9,33 +9,57 @@ use TDD\Receipt;
 class ReceiptTest extends TestCase {
 	// We instantiate new instances in the setUp method
 	public function setUp() {
-		$this->Receipt = new Receipt();
+		$this->Formatter = $this->getMockBuilder('TDD\Formatter')
+			->setMethods(['currencyAmt'])
+			->getMock();
+		$this->Formatter->expects($this->any())
+			->method('currencyAmt')
+			->with($this->anything())
+			->will($this->returnArgument(0));
+		$this->Receipt = new Receipt($this->Formatter);
 	}
 	// We can unset instances in the tearDown method to ensure PHP doesn't carry anything over from one test run to the next
 	public function tearDown() {
 		unset($this->Receipt);
 	}
 
-	public function testTotal() {
-		$input = [0,2,5,8];
+ /**
+  * @dataProvider provideSubtotal
+  */
+	public function testSubtotal($items, $expected) {
+		// $input = [0,2,5,8];
 		$coupon = null;
-		$output = $this->Receipt->total($input, $coupon);
+		$output = $this->Receipt->subtotal($items, $coupon);
 		$this->assertEquals(
-			15,
+			$expected,
 			$output,
-			'When summing the total should equal 15'
+			"When summing the total should equal {$expected}"
 		);
 	}
 
-	public function testTotalAndCoupon() {
+	public function provideSubtotal() {
+		return [
+			'ints totaling 16' => [[1,2,5,8], 16],
+			[[-1,2,5,8], 14],
+			[[1,2,8], 11],
+		];
+	}
+	public function testSubtotalAndCoupon() {
 		$input = [0,2,5,8];
 		$coupon = 0.20;
-		$output = $this->Receipt->total($input, $coupon);
+		$output = $this->Receipt->subtotal($input, $coupon);
 		$this->assertEquals(
 			12,
 			$output,
 			'When summing the total should equal 12'
 		);
+	}
+
+	public function testSubtotalException() {
+		$input = [0,2,5,8];
+		$coupon = 1.20;
+		$this->expectException('BadMethodCallException');
+		$this->Receipt->subtotal($input, $coupon);
 	}
 
 	public function testPostTaxTotal() {
@@ -45,31 +69,31 @@ class ReceiptTest extends TestCase {
 		// Build a mock PHPUnit
 		// The setMethods call takes an array of methods for the test double to respond to
 		$Receipt = $this->getMockBuilder('TDD\Receipt')
-			->setMethods(['tax', 'total'])
+			->setMethods(['tax', 'subtotal'])
+			->setConstructorArgs([$this->Formatter])
 			->getMock();
 		$Receipt->expects($this->once())
-			->method('total')
+			->method('subtotal')
 			->with($items, $coupon)
 			->will($this->returnValue(10.00));
 		$Receipt->expects($this->once())
 			->method('tax')
-			->with(10.00, $tax)
+			->with(10.00)
 			->will($this->returnValue(1.00));
-		$result = $Receipt->postTaxTotal([1,2,5,8], 0.20, null);
+		$result = $Receipt->postTaxTotal([1,2,5,8], null);
 		$this->assertEquals(11.00, $result);
 	}
 
 	public function testTax() {
 		$inputAmount = 10.00;
-		$taxInput = 0.10;
-		$output = $this->Receipt->tax($inputAmount, $taxInput);
+		$this->Receipt->tax = 0.10;
+		$output = $this->Receipt->tax($inputAmount);
 		$this->assertEquals(
 			1.00,
 			$output,
 			'The tax calculation should equal 1.00'
 		);
 	}
-
 }
 
 
